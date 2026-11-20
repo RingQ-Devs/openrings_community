@@ -1,0 +1,31 @@
+<%- include('partials/header') %>
+<div class="page-head"><h1>Search</h1></div>
+<div class="layout">
+  <div class="content">
+    <form class="search-form card" action="<%= url('/search') %>" method="get" role="search">
+      <label class="sr-only" for="search-q">Search</label>
+      <input id="search-q" type="search" name="q" value="<%= q %>" placeholder="Search threads and answers…" autofocus>
+      <button class="btn btn--primary" type="submit">Search</button>
+    </form>
+    <% if (q) { %>
+      <p class="muted"><%= results.length %> result<%= results.length === 1 ? '' : 's' %> for “<%= q %>”</p>
+      <ul class="search-results">
+        <% results.forEach(r => { %>
+        <li class="card search-result">
+          <a class="search-title" href="<%= url('/posts/' + r.postId) %>"><%= r.thread.title %></a>
+          <% if (r.thread.is_solved) { %><span class="label label--solved"><%- icon('check', 12) %> Solved</span><% } %>
+          <p class="search-snippet"><%- r.snippet %></p>
+          <p class="muted small"><%= r.thread.forum_title %> · <%= r.thread.reply_count %> <%= r.thread.reply_count === 1 ? 'reply' : 'replies' %> · <%= fmt.formatDate(r.thread.created_at) %></p>
+        </li>
+        <% }) %>
+      </ul>
+      <% if (!results.length) { %>
+      <div class="empty card">
+        <p>No matches. Try other words, or use <strong>Ask a question</strong> at the top. The <%= supportTeamName %> team replies in the thread.</p>
+      </div>
+      <% } %>
+    <% } %>
+  </div>
+  <%- include('partials/sidebar') %>
+</div>
+<%- include('partials/footer') %>

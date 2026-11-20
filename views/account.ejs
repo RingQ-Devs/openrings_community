@@ -1,0 +1,21 @@
+<%- include('partials/header') %>
+<div class="narrow">
+  <div class="page-head"><h1>Account settings</h1><a class="btn btn--ghost btn--sm" href="<%= url(fmt.memberPath(user)) %>">View public profile</a></div>
+  <% if (errors.length) { %><div class="alert alert--error"><ul><% errors.forEach(e => { %><li><%= e %></li><% }) %></ul></div><% } %>
+  <form class="card form" method="post" action="<%= url('/account') %>">
+    <h2>Profile</h2>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label class="field"><span>Location</span><input type="text" name="location" value="<%= user.location %>" maxlength="80" placeholder="City, Country"></label>
+    <label class="field"><span>Website</span><input type="url" name="website" value="<%= user.website %>" maxlength="200" placeholder="https://"></label>
+    <label class="field"><span>About you</span><textarea name="bio" rows="4" maxlength="1000" placeholder="Your role, what you run OpenRings for…"><%= user.bio %></textarea></label>
+    <div class="form-actions"><button class="btn btn--primary" type="submit">Save profile</button></div>
+  </form>
+  <form class="card form" method="post" action="<%= url('/account/password') %>">
+    <h2>Change password</h2>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label class="field"><span>Current password</span><input type="password" name="current" required autocomplete="current-password"></label>
+    <label class="field"><span>New password</span><input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <div class="form-actions"><button class="btn btn--primary" type="submit">Change password</button></div>
+  </form>
+</div>
+<%- include('partials/footer') %>
