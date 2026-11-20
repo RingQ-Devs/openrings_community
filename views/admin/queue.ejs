@@ -1,0 +1,89 @@
+<%- include('../partials/header') %>
+<div class="page-head"><h1>Daily posts queue</h1></div>
+<%- include('_nav') %>
+<section class="card today-card today--<%= today.state.level %>">
+  <h2 class="card-title">Today's daily posts · <%= today.date %></h2>
+  <p><%= today.state.text %></p>
+  <p class="muted small">Setting: <%= today.perDay %> questions a day, published at random times between <%= today.window %> (<%= today.timezone %>)<%= today.next ? ' · next one at ' + fmt.formatDateTime(today.next) : '' %>. Questions are published only while the forum is running; ones whose time passed while it was stopped are published as soon as it starts.</p>
+  <% if (counts.pending) { %>
+  <form method="post" action="<%= url('/admin/queue/approve-all') %>" class="inline-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="btn btn--primary btn--sm" type="submit">Approve all <%= counts.pending %> waiting question<%= counts.pending === 1 ? '' : 's' %></button>
+    <span class="muted small">To skip approval from now on, untick “Hold generated questions for admin approval” in <a href="<%= url('/admin/settings') %>">Answer settings</a>.</span>
+  </form>
+  <% } %>
+  <% if (today.state.retryJobId) { %>
+  <form method="post" action="<%= url('/admin/jobs/' + today.state.retryJobId + '/retry') %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn--sm" type="submit">Try again now</button></form>
+  <% } %>
+</section>
+<div class="admin-grid admin-grid--wide">
+  <section class="card">
+    <h2 class="card-title">Generate questions now</h2>
+    <form class="inline-form" method="post" action="<%= url('/admin/queue/generate') %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>How many <input type="number" name="count" value="3" min="1" max="20"></label>
+      <button class="btn btn--primary btn--sm" type="submit" <%= aiConfigured ? '' : 'disabled' %>>Generate with AI</button>
+    </form>
+    <% if (pendingGenerate) { %><p class="muted small">Generation in progress… refresh in a minute.</p><% } %>
+    <p class="muted small">Questions are spread over today's posting window and published by persona accounts. The AI answers each one after the configured delay.</p>
+  </section>
+  <section class="card">
+    <h2 class="card-title">Write one yourself</h2>
+    <details>
+      <summary class="small">Schedule a question from a persona</summary>
+      <form class="form" method="post" action="<%= url('/admin/queue/manual') %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="field-row">
+          <label class="field"><span>Forum</span><select name="forum_id"><% forums.filter(f => !f.staff_only).forEach(f => { %><option value="<%= f.id %>"><%= f.title %></option><% }) %></select></label>
+          <label class="field"><span>Persona</span><select name="persona_id"><% personas.forEach(p => { %><option value="<%= p.id %>"><%= p.username %></option><% }) %></select></label>
+        </div>
+        <label class="field"><span>Title</span><input type="text" name="title" minlength="8" maxlength="150" required></label>
+        <label class="field"><span>Question</span><textarea name="body" rows="5" required></textarea></label>
+        <label class="field"><span>Publish at, site time zone (leave empty for now)</span><input type="datetime-local" name="publish_at"></label>
+        <button class="btn btn--primary btn--sm" type="submit">Schedule</button>
+      </form>
+    </details>
+  </section>
+</div>
+
+<nav class="tabs tabs--underline">
+  <a class="tab<%= !status ? ' is-active' : '' %>" href="<%= url('/admin/queue') %>">All</a>
+  <% ['pending', 'approved', 'published', 'rejected', 'failed'].forEach(s => { %>
+    <a class="tab<%= status === s ? ' is-active' : '' %>" href="<%= url('/admin/queue?status=' + s) %>"><%= s %> (<%= counts[s] || 0 %>)</a>
+  <% }) %>
+</nav>
+
+<div class="queue-list">
+<% items.forEach(it => { %>
+  <article class="card queue-item">
+    <header class="queue-head">
+      <span class="status status--<%= it.status %>"><%= it.status %></span>
+      <strong><%= it.title %></strong>
+      <span class="muted small"><%= it.forum_title %> · by <%= it.persona_username %> · <%= it.status === 'published' ? 'published' : 'publishes' %> <%= fmt.formatDateTime(it.publish_at) %></span>
+    </header>
+    <% if (it.status === 'published' && it.thread_id) { %>
+      <a class="small" href="<%= url('/threads/' + it.thread_slug + '.' + it.thread_id + '/') %>">View thread ›</a>
+    <% } else { %>
+    <details>
+      <summary class="small">Review / edit</summary>
+      <form class="form" method="post" action="<%= url('/admin/queue/' + it.id) %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label class="field"><span>Forum</span><select name="forum_id"><% forums.filter(f => !f.staff_only).forEach(f => { %><option value="<%= f.id %>" <%= f.id === it.forum_id ? 'selected' : '' %>><%= f.title %></option><% }) %></select></label>
+        <label class="field"><span>Title</span><input type="text" name="title" value="<%= it.title %>" maxlength="150"></label>
+        <label class="field"><span>Question</span><textarea name="body" rows="7"><%= it.body %></textarea></label>
+        <% if (it.topic_hint) { %><p class="muted small">Topic idea: <%= it.topic_hint %></p><% } %>
+        <% if (it.error) { %><p class="alert alert--error small"><%= it.error %></p><% } %>
+        <div class="form-actions">
+          <button class="btn btn--sm" name="action" value="save" type="submit">Save</button>
+          <% if (it.status !== 'approved') { %><button class="btn btn--sm btn--primary" name="action" value="approve" type="submit">Approve</button><% } %>
+          <button class="btn btn--sm btn--accent" name="action" value="publish" type="submit">Publish now</button>
+          <% if (it.status !== 'rejected') { %><button class="btn btn--sm btn--danger" name="action" value="reject" type="submit">Reject</button><% } %>
+        </div>
+      </form>
+    </details>
+    <% } %>
+  </article>
+<% }) %>
+<% if (!items.length) { %><div class="empty card"><p>Nothing in the queue.</p></div><% } %>
+</div>
+<%- include('../partials/footer') %>

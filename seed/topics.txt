@@ -1,0 +1,42 @@
+Hardware sizing for 50 extensions and 10 concurrent calls
+Installing on a cloud VPS versus on-premise hardware
+Installing in Proxmox or VMware as a virtual machine
+Connecting a SIP trunk that uses IP authentication instead of registration
+One-way audio for remote extensions behind NAT
+Disabling SIP ALG on common office routers
+Auto-provisioning Yealink desk phones on the local network
+Setting up BLF keys to see colleagues' status
+Building an IVR with office hours and a holiday schedule
+Difference between a ring group and a call queue
+Voicemail to email delivery not arriving
+Recording all calls for a team and how long to keep them
+Choosing codecs (G.711 vs G.722 vs Opus) for remote staff
+Securing the PBX from SIP brute-force attacks
+Backing up and restoring the PBX before an upgrade
+Moving from an old analog PBX and keeping existing phone numbers
+Connecting analog fax machines or using fax to email
+Click-to-call from a CRM using the API or webhooks
+Using a mobile softphone app for staff working from home
+Browser-based WebRTC calling for agents
+Failover when the primary internet line goes down
+Multi-site setup with branch offices dialing each other by extension
+Caller ID showing the wrong number on outbound calls
+Emergency calling and paging for a school campus
+Queue reports: average wait time and abandoned calls
+Hotel room phones, wake-up calls and front desk features
+Calls dropping after exactly 30 seconds
+Extension shows registered but cannot receive calls
+TLS and SRTP for encrypted calls
+Monitoring the PBX with SNMP or other monitoring tools
+Migrating a FreeSWITCH-style XML dialplan and checking it with orswitch -compat
+Connecting an existing ESL client to the event socket on port 8021
+Adding a new company as its own domain on a multi-tenant server
+Choosing a queue ring strategy and setting up tiers for a support team
+Using AUX codes and wrap-up time for call centre agents
+Running the container with host networking and a mounted config folder
+Building from source with vendored dependencies on an offline server
+Receiving faxes with T.38 from a SIP carrier
+Browser dialer not connecting over WSS behind a reverse proxy
+Sizing a server for 100 concurrent calls with call transcription
+Office hours and time zones per company in the dialplan
+SIP Guard banned an office IP address and how to allow it

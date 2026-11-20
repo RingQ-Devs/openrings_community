@@ -1,0 +1,33 @@
+<%- include('partials/header') %>
+<div class="page-head">
+  <div><h1>Members</h1><p class="muted">The people behind the questions and answers.</p></div>
+</div>
+<div class="layout">
+  <div class="content">
+    <nav class="tabs tabs--underline" aria-label="Member lists">
+      <% Object.entries(tabs).forEach(([key, label]) => { %>
+        <a class="tab<%= tab === key ? ' is-active' : '' %>" href="<%= url('/members/?tab=' + key) %>"><%= label %></a>
+      <% }) %>
+    </nav>
+    <ol class="member-list">
+      <% members.forEach((m, i) => { %>
+      <li class="member-card card">
+        <span class="member-rank"><%= tab === 'newest' || tab === 'staff' ? '' : i + 1 %></span>
+        <%- h.avatar(m, 52) %>
+        <div class="member-info">
+          <div class="member-name"><%- h.userLink(url(''), m) %> <%- badges(m) %></div>
+          <div class="muted small"><%= m.title || fmt.ROLE_LABELS[m.role] || 'Member' %><%= m.location ? ' · ' + m.location : '' %></div>
+          <div class="muted small">Joined <%= fmt.formatDate(m.created_at) %></div>
+        </div>
+        <dl class="member-stats">
+          <div><dt>Messages</dt><dd><%= fmt.compactNumber(m.post_count) %></dd></div>
+          <div><dt>Likes</dt><dd><%= fmt.compactNumber(m.like_count) %></dd></div>
+        </dl>
+      </li>
+      <% }) %>
+    </ol>
+    <% if (!members.length) { %><div class="empty card"><p>No members here yet.</p></div><% } %>
+  </div>
+  <%- include('partials/sidebar') %>
+</div>
+<%- include('partials/footer') %>

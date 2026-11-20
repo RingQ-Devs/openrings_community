@@ -1,0 +1,20 @@
+<div class="editor" data-editor>
+  <div class="editor-bar" role="toolbar" aria-label="Formatting">
+    <div class="editor-tabs">
+      <button type="button" class="editor-tab is-active" data-tab="write">Write</button>
+      <button type="button" class="editor-tab" data-tab="preview">Preview</button>
+    </div>
+    <div class="editor-tools">
+      <button type="button" data-md="bold" title="Bold"><b>B</b></button>
+      <button type="button" data-md="italic" title="Italic"><i>I</i></button>
+      <button type="button" data-md="code" title="Code">&lt;/&gt;</button>
+      <button type="button" data-md="link" title="Link"><%- icon('link', 15) %></button>
+      <button type="button" data-md="list" title="Numbered list">1.</button>
+      <button type="button" data-md="quote" title="Quote"><%- icon('quote', 15) %></button>
+    </div>
+  </div>
+  <textarea name="body" id="<%= typeof id !== 'undefined' ? id : 'body' %>" rows="<%= typeof rows !== 'undefined' ? rows : 8 %>" required maxlength="30000"
+    placeholder="<%= typeof placeholder !== 'undefined' ? placeholder : 'Write your message…' %>"><%= typeof value !== 'undefined' ? value : '' %></textarea>
+  <div class="editor-preview post-body" hidden></div>
+  <p class="editor-hint muted small">Markdown supported: **bold**, `code`, ```code blocks```, &gt; quotes, lists and links. Never post passwords or API keys.</p>
+</div>
