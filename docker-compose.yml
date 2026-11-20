@@ -1,0 +1,14 @@
+# Runs the forum in Docker and connects to PostgreSQL on the host machine.
+# In .env set DB_HOST=host.docker.internal (or the address of your database server).
+services:
+  community:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      TRUST_PROXY: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:3000:3000"
