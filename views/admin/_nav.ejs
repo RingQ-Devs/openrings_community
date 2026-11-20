@@ -1,6 +1,0 @@
-<nav class="admin-nav" aria-label="Admin">
-  <a href="<%= url('/support/inbox') %>">Support inbox<% if (inboxCount) { %> (<%= inboxCount %>)<% } %></a>
-  <% [['', 'dashboard', 'Dashboard'], ['/queue', 'queue', 'Daily posts'], ['/settings', 'settings', 'Answer settings'], ['/ai', 'ai', 'AI provider'], ['/knowledge', 'knowledge', 'Knowledge base'], ['/topics', 'topics', 'Topic ideas'], ['/personas', 'personas', 'Personas'], ['/forums', 'forums', 'Forums'], ['/users', 'users', 'Users & staff'], ['/jobs', 'jobs', 'Activity']].forEach(([p, key, label]) => { %>
-    <a href="<%= url('/admin' + p) %>" class="<%= adminSection === key ? 'is-active' : '' %>"><%= label %></a>
-  <% }) %>
-</nav>
