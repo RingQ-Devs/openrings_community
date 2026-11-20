@@ -1,198 +1,329 @@
-# OpenRings Community
+# OpenRings Community: deploying on the openrings.org Linux server
 
-The Q&A community forum for [OpenRings](https://openrings.org/), the open-source telephony switch written in Go. It is built to run at `openrings.org/community`, with the same logo, colours and light/dark theme as the main site. Its header holds only community links: Forums, What's new, Members (plus Support inbox and Admin for staff), search and one **Ask a question** button.
+This guide is for the developer who runs **openrings.org**. It puts the community forum at
+**https://openrings.org/community/** on the same server.
 
-- **Members** register, log in, ask questions, reply, like posts and mark solutions. Everyone can read every thread.
-- **The RingQ Support team answers.** Support engineers and admins carry a team badge (the name is set in Admin → Answer settings). They can pin, lock, move, rename and delete threads.
-- **Drafted answers, reviewed by engineers.** For every new question, a draft reply is written by an AI model (**Claude, OpenAI, or a free self-hosted model**, your choice) and assigned at random to an **on-duty** support engineer. The engineer reviews it in the **Support inbox**, edits it if needed and posts it under their own name. Nothing is posted under an engineer's name until a person approves it. Or choose **Automatic, in real time**: every question is answered within seconds by the automated account (labelled *Automated*), and the answer appears on the thread page without reloading.
-- **Daily discussions.** Each day the scheduler writes new, realistic questions from a pool of sample member accounts and publishes them at random times. Their answers go through the same Support inbox. Some threads get a follow-up from the original poster.
-- **SEO.** Server-rendered pages, clean URLs (`/threads/title-slug.123/`), canonical tags, Open Graph, `DiscussionForumPosting` structured data, `sitemap.xml` and `robots.txt`.
-- **Admin panel.** Answer settings, the knowledge base used for drafts, topic ideas, sample accounts, the daily posts queue, forums, users and the duty roster, and an activity log.
+## How it fits together
 
-Tech: Node.js 22+, Express 5, PostgreSQL 12+ (with full-text search), EJS templates, and the official `@anthropic-ai/sdk` and `openai` SDKs. It runs as one Node.js process plus your PostgreSQL database; there is no Redis or other service.
+```
+Browser ──HTTPS──> nginx (existing openrings.org site)
+                     ├── /            → existing website (unchanged)
+                     └── /community/  → Node.js forum on 127.0.0.1:3000 ──> PostgreSQL database "openrings_community"
+                                                                    └──> Claude API or OpenAI API (drafts replies for the support team)
+```
 
-> **Deploying on the Linux server?** Follow [docs/DEPLOY-LINUX.md](docs/DEPLOY-LINUX.md). **Testing on Windows?** Follow [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md).
+- The forum is one Node.js process (Express, server-rendered pages). It listens only on `127.0.0.1:3000`, so nothing new is exposed to the internet.
+- It has its own PostgreSQL database. It never touches any other database.
+- No Redis, queue server or build step. The background jobs (draft replies, daily posts) run inside the same process.
+- The light/dark theme uses the same `localStorage` key as openrings.org (`or-theme`), so a visitor's choice carries over automatically.
+
+## What's in the zip
+
+`openrings-community.zip` holds the application source, `package.json` / `package-lock.json`, docs, and the example configs in `deploy/`. It does **not** contain `.env`, passwords, API keys or `node_modules`. You create those on the server.
+
+| Path | What it is |
+|---|---|
+| `src/` | Application code. `src/schema.sql` defines the database tables |
+| `views/`, `public/` | Page templates, CSS, JavaScript, logo |
+| `knowledge/openrings.md` | Starting text for the knowledge base (copied into the database on first start) |
+| `seed/` | Default forums, sample member accounts, topic ideas (inserted on first start) |
+| `scripts/doctor.js` | Checks Node, database, tables, admin account and API key |
+| `scripts/init.js` | Creates admin / support accounts, resets passwords |
+| `deploy/` | nginx and Apache snippets, systemd service |
+| `.env.example` | All settings, with comments |
+
+## Requirements
+
+- 64-bit Linux (Ubuntu/Debian or RHEL/Rocky/AlmaLinux). Tested on Ubuntu 24.04.
+- **Node.js 22 or 24 (LTS).** Tested on 22 and 24.
+- **PostgreSQL 12 or newer.** An existing PostgreSQL server on the machine is fine.
+- The existing web server for openrings.org (nginx assumed; an Apache snippet is included), already serving HTTPS.
+- Outbound HTTPS from the server to `api.anthropic.com` (Claude) or `api.openai.com` (OpenAI), for drafting replies. Or, for the self-hosted **Open Rings AI**, about 8 GB of free memory and 6 GB of disk; outbound HTTPS is needed only once, to download the engine and the model (see "Open Rings AI engine" below).
+- About 200 MB disk for the app, plus database growth. Memory: under 200 MB for the Node process.
 
 ---
 
-## Quick start (local)
+## Step 1: Install Node.js
 
-1. Create a PostgreSQL database and user:
+Skip if `node -v` already prints v22 or v24.
 
-   ```sql
-   CREATE ROLE openrings WITH LOGIN PASSWORD 'choose-a-password';
-   CREATE DATABASE openrings_community OWNER openrings ENCODING 'UTF8' TEMPLATE template0;
-   ```
+**Ubuntu / Debian**
+```bash
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt-get install -y nodejs unzip
+node -v
+```
 
-2. Install, configure and start the forum. The tables are created automatically on first run:
+**RHEL / Rocky / AlmaLinux**
+```bash
+curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo bash -
+sudo dnf install -y nodejs unzip
+node -v
+```
 
-   ```bash
-   cd community
-   npm install
-   cp .env.example .env              # set DB_PASSWORD, SITE_TIMEZONE, ANTHROPIC_API_KEY
-   node scripts/doctor.js            # checks Node, database and API key
-   node scripts/init.js --admin admin you@example.com 'a-strong-password'
-   npm start                         # http://localhost:3000
-   ```
+## Step 2: PostgreSQL: create the database (one time)
 
-To try the AI features without an API key, set `AI_PROVIDER=mock` in `.env`. The site then posts clearly marked demo answers.
-
-Useful commands:
-
-| Command | What it does |
-|---|---|
-| `node scripts/doctor.js` | Checks the Node.js version, database connection, tables, admin account and Claude API key |
-| `node scripts/init.js` | Creates the tables, default forums and starter personas (also done automatically on start) |
-| `node scripts/init.js --admin <user> <email> <password>` | Creates an admin account (or promotes an existing user) |
-| `node scripts/init.js --support <user> <email> <password>` | Creates a support engineer account |
-| `node scripts/init.js --reset-password <user> <new-password>` | Resets a user's password and signs them out everywhere |
-| `node scripts/seed-today.js 5 --publish` | Generates 5 daily questions now and publishes them immediately |
-| `npm test` | Runs the test suite with mock AI in a temporary schema (needs `TEST_DATABASE_URL`, see below) |
-| `npm run dev` | Starts with auto-reload |
-
-You can also add support engineers, and choose who is **on duty**, in **Admin → Users & staff**.
-
-## Configuration (`.env`)
-
-| Variable | Default | Notes |
-|---|---|---|
-| `SITE_URL` | `http://localhost:3000` | Public origin with no path, e.g. `https://openrings.org` |
-| `BASE_PATH` | *(empty)* | e.g. `/community` to serve at `https://openrings.org/community/` |
-| `SITE_TIMEZONE` | `UTC` | Time zone for the daily posting window and dates |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | | Optional fallbacks. Normally you choose the provider (Claude, OpenAI or self-hosted Open Rings AI) and enter keys in **Admin → AI provider** |
-| `AI_MODEL` / `OPENAI_MODEL` | `claude-opus-5-5` / `gpt-5.5` | Default models when none is chosen in the admin panel |
-| `AI_PROVIDER` | | `anthropic`, `openai`, `local`, `mock` or `none`. Used only until a provider is saved in the admin panel |
-| `SECRET_KEY` | *(auto: `data/secret.key`)* | Encrypts API keys saved in the admin panel. Set it for Docker or several servers |
-| `ADMIN_USERNAME/EMAIL/PASSWORD` | | Optional: creates the first admin on first start |
-| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | `localhost` / `5432` / `openrings_community` / `openrings` / | PostgreSQL connection. Quote the password if it contains `#` |
-| `DATABASE_URL` | | Alternative to the `DB_*` lines: one `postgres://` connection string |
-| `DB_SCHEMA` | `public` | Put the tables in another schema, e.g. inside an existing database |
-| `DB_SSL` | `false` | Set `true` for cloud databases that require SSL |
-| `HOST` | `127.0.0.1` | Use `0.0.0.0` in Docker or to test from other devices |
-| `COOKIE_SECURE` | on when `NODE_ENV=production` | Secure-only cookies. Set `false` only if you test production mode over plain http |
-| `RUN_WORKERS` | `true` | Runs the AI and scheduler worker in the web process. Run only **one** instance |
-
-Everything else (review or automatic mode, support team name, delays, questions per day, posting window, approval mode, announcement banner) is set in **Admin → Answer settings** and takes effect immediately.
-
-## AI provider: Claude, OpenAI or Open Rings AI
-
-Choose in **Admin → AI provider** (a dropdown). Only the chosen provider's settings are shown. Each provider keeps its own settings, so you can switch back and forth, and changes apply immediately. **Save and test connection** checks everything with one tiny request, and the result stays on the page.
-
-| Provider | Needs | Cost | Notes |
-|---|---|---|---|
-| **Claude** (Anthropic) | API key | Pay per use | Best quality. Messages API with structured outputs, prompt caching and server-side fallback |
-| **OpenAI** | API key | Pay per use | Responses API with a strict JSON schema; `store: false` |
-| **Open Rings AI** (self-hosted) | A machine with about 8 GB free memory; set up with `npm run ai:setup` | No per-use cost | Free open-source model on your own hardware. Slower and simpler answers. See below |
-| Demo text | nothing | free | Clearly marked test text, for trying the Support inbox |
-| Off | nothing | free | No drafts and no daily posts; staff answer everything by hand |
-
-API keys are stored in the database encrypted with AES-256-GCM and only ever shown masked. The encryption key is `SECRET_KEY` if set, otherwise a random `data/secret.key` created on first save. Keep `data/secret.key` with your backups, or re-enter the keys after a restore. Keys in `.env` still work as a fallback.
-
-The prompts were written and tested with Claude. After switching provider, read the first few drafts before relying on them.
-
-### Open Rings AI (self-hosted, no API key)
-
-Open Rings AI runs on your own machine: the forum server itself, or another machine on the same network. No API key and no per-use cost. Needs:
-- **Memory:** about 8 GB free for the default model; 16 GB total is comfortable.
-- **Disk:** about 6 GB.
-- **Speed:** without a graphics card, expect roughly one to several minutes per answer. A graphics card makes it much faster.
-- **Quality:** clearly below Claude and OpenAI. Engineers should review answers (Support review mode) until you trust it.
-
-**Set it up with one command**, in the forum folder:
-- Windows (Command Prompt): `npm run ai:setup`
-- Linux: `sudo node scripts/setup-openrings-ai.js` (administrator rights are needed once, to install the engine)
-
-The setup:
-1. installs the Open Rings AI engine and starts it (first time only);
-2. downloads the language model, about 5 GB, first time only (an interrupted download resumes);
-3. creates the `openrings-ai` model, with a context window large enough for the knowledge base and a whole thread;
-4. tests it;
-5. selects **Open Rings AI** in **Admin → AI provider**. The running forum picks it up within a few seconds.
-
-Then open **Admin → AI provider** and click **Save and test connection**. Leave *Engine address* and *Model name* empty to use the engine on the same machine (`http://127.0.0.1:11434/v1`) and `openrings-ai`.
-
-Options: `--base <model>` builds on another language model (default `qwen2.5:7b`; check a model's licence before using it in production). `--url http://<machine>:11434` uses an engine on another machine, which is then set up there. `--no-install` never installs anything. `--no-activate` leaves the forum setting unchanged.
-
-If the engine stops (for example after a restart of the machine), answers wait and are retried every hour for a day, so they are written once it runs again. The connection test in **Admin → AI provider** says what to do.
-
-The engine listens on port 11434 without a login, so keep that port closed to the internet. The forum uses its standard OpenAI-compatible `/v1/chat/completions` endpoint: it asks for strict JSON first, falls back to plain JSON mode if needed, and validates every answer.
-
-**Questions from staff accounts don't get drafts automatically.** Otherwise every staff post would get one. To test, ask from a member account, or use **Staff tools → Generate draft reply** on a thread.
-
-## How answers work
-
-**Support review mode (default).**
-1. A member posts a thread. The forum queues an answer job (default delay: 20 seconds).
-2. The worker sends the model (Claude, OpenAI or Open Rings AI) the instructions (with the knowledge base, prompt-cached), the whole thread, and links to similar threads. It returns `{ should_reply, reply_markdown }` as structured JSON. It skips posts that don't need an answer, such as "thanks".
-3. The reply is saved as a **draft** and assigned at random to a support engineer marked **On duty** in **Admin → Users & staff**. If nobody is on duty, it goes to any support engineer.
-4. Engineers see their drafts in the **Support inbox** (`/support/inbox`, also linked in the menu with a count). They edit the text, choose who to **post as**, and click **Post reply**. They can also ask for a new draft or discard it.
-5. Follow-up questions from the member produce new drafts, up to *Max support answers per thread*. If an engineer replies by hand, the waiting draft is discarded automatically.
-
-**Support review with automatic fallback (optional).** Same as above, but a draft that no engineer posts within *N* minutes (default 30) is posted from the automated account, labelled **Automated**. Every question gets an answer, and engineers can still reply afterwards. Good for nights and weekends.
-
-**Automatic, in real time (optional).** Every question gets an answer within seconds, without waiting for review. It is posted from the automated account labelled **Automated**, never under an engineer's name. Engineers can still add to any thread. When you switch to this mode, drafts already waiting in the Support inbox are posted too.
-
-Choose the mode in **Admin → Answer settings**. There you can also set a **random wait** (min/max seconds) before each reply, so replies don't all arrive at the same interval. For real-time answers, use 0–5 seconds.
-
-**Replies appear without reloading.** An open thread page checks for new posts every few seconds (less often after a few idle minutes, and not while the tab is hidden). While an automatic answer is being written, the page shows *A reply is being prepared…*. New posts slide in and the reply count updates. This uses a small JSON endpoint, `GET /threads/<id>/live?after=<post id>`, and needs nothing extra on the server or proxy.
-
-**The knowledge base matters.** Drafts take OpenRings product facts only from **Admin → Knowledge base**. It lives in the database. [`knowledge/openrings.md`](knowledge/openrings.md) is only the starting text, copied in the first time the forum runs on a new database; later changes to the file are not picked up. The starting text is pre-filled from the openrings.org home page. A database that still has the first starter template ("built on RingQ Switch") is upgraded once on start: lines added in the admin panel are kept in an "Added in the admin panel" section, and the previous text is shown read-only on the Knowledge base page. Add detail from the docs (config files, portal menus, FAQs) and fill the remaining `[TO FILL]` lines. Drafts never invent commands or features the knowledge base doesn't mention.
-
-Failed jobs retry with backoff. A job that fails because the account has no credit (Claude) or quota (OpenAI) retries every hour for a day. **Admin → Activity** shows every job with token usage and errors, and lets you retry.
-
-## How the daily discussions work
-
-- Once a day (site time zone), the scheduler queues a `seed_generate` job. One model call writes *N* questions, each in a chosen sample member's voice for a chosen forum. Forums are picked by their *Daily posts weight*; members are rotated.
-- Topic ideas from **Admin → Topic ideas** are used first, and each one is removed once used. Add the questions you want OpenRings to rank for.
-- Questions are scheduled at random times inside the posting window (default 09:00–21:00). With **Hold generated questions for admin approval** ticked, they wait in **Admin → Daily posts** for review or editing first; **Approve all** there releases them in one click (overdue ones publish at once). The option is off by default, so daily questions publish on their own. The top of that page explains today's status: how many questions are planned and when the next one is due, or why nothing was planned (daily posts off, no AI provider, an error, with a **Try again now** button).
-- When a question publishes, an answer draft follows after a random delay (default 10–90 minutes) and lands in an on-duty engineer's Support inbox. After the first answer is posted, there is a 35% chance the member asks one follow-up.
-- Sample member accounts can't log in. Manage them in **Admin → Personas**. A setting in **Admin → Answer settings** can label them "Sample question"; it is off by default.
-
-## Deploying
-
-**Production on the openrings.org Linux server: follow [docs/DEPLOY-LINUX.md](docs/DEPLOY-LINUX.md).** It covers Node.js, the PostgreSQL database (tables are created automatically), `.env`, the systemd service, the nginx/Apache rule for `/community/`, backups, updates and troubleshooting.
-
-Local testing on Windows: [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md).
-
-## Running the tests
-
-The tests run with mock AI inside a temporary schema (`test_xxxx`) that is dropped afterwards, so they can point at your normal database:
+If PostgreSQL is not installed yet:
 
 ```bash
-TEST_DATABASE_URL=postgres://openrings:PASSWORD@localhost:5432/openrings_community npm test
+# Ubuntu / Debian
+sudo apt-get install -y postgresql
+# RHEL family
+sudo dnf install -y postgresql-server && sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql
 ```
 
-(On Windows PowerShell: `$env:TEST_DATABASE_URL = "postgres://..."`, then `npm test`.)
+Create a login role and an empty database owned by it. Choose a strong password:
 
-## Cost estimate
-
-With the default `claude-opus-5-5` at `medium` effort, a typical draft uses about 3–8K input tokens and 1–3K output tokens: roughly **$0.03–0.08 per draft**. With OpenAI, the token counts are similar; multiply by your chosen model's prices. Three daily questions with answers and some follow-ups come to roughly **$0.30–0.60 per day**, plus the answers to real members' questions. Check real usage in **Admin → Activity** (token counts per job). To lower costs, set `AI_EFFORT=low` or choose a smaller model with `AI_MODEL`.
-
-## Project layout
-
+```bash
+sudo -u postgres psql
 ```
-community/
-  src/
-    app.js, server.js, worker.js   Express app, entry point, background worker
-    config.js, db.js, schema.sql   configuration, PostgreSQL pool and schema
-    services/                      users, forums/threads/posts, jobs, settings
-    ai/                            model client (Claude or OpenAI), prompts, answer drafts, daily seeder
-    routes/                        public, posting, auth, support inbox, admin
-    lib/                           markdown sanitizing, formatting, icons, security
-  views/                           EJS templates (admin/ = admin panel)
-  public/                          CSS, JS, logo
-  knowledge/openrings.md           AI knowledge base (starting copy)
-  seed/                            default forums, starter personas, topic ideas
-  scripts/                         doctor, init and seed-today CLIs
-  docs/SETUP-WINDOWS.md            step-by-step Windows setup
-  test/                            node:test suite
-  deploy/                          nginx + systemd examples
+```sql
+CREATE ROLE openrings WITH LOGIN PASSWORD 'CHANGE-ME-strong-password';
+CREATE DATABASE openrings_community OWNER openrings ENCODING 'UTF8' TEMPLATE template0;
+\q
 ```
 
-The theme uses the same CSS variables as openrings.org (top of `public/css/style.css`), dark by default with a light switch. Visitors' light/dark choice is shared with the main site (`localStorage` key `or-theme`).
+**That's all you create by hand. Do not create tables.** On its first start, the app:
 
-## Not included yet
+1. creates its 11 tables and their indexes from `src/schema.sql`: `users`, `sessions`, `categories`, `forums`, `threads`, `posts`, `post_likes`, `reply_drafts`, `jobs`, `scheduled_posts`, `settings`;
+2. inserts the default forums, the sample member accounts, the starter knowledge base and topic ideas, and the account that posts automated answers.
 
-- Email (verification, password reset, reply notifications). This needs an SMTP provider. Until it is added, reset passwords on the server with `node scripts/init.js --reset-password <user> <new-password>`.
-- File and image uploads. Images can be linked with Markdown.
-- Multiple web servers. Background jobs are already safe to run in several processes, but the login rate limiter is in-memory. Run one instance; that handles a large community.
+The schema script uses `CREATE … IF NOT EXISTS`, so it runs safely on every start. Future versions add their new tables or columns the same way, so upgrades need no manual SQL. A PostgreSQL advisory lock makes sure only one process runs it at a time.
+
+> **RHEL family only:** the default `pg_hba.conf` uses `ident` for TCP connections, so password logins fail with *"Ident authentication failed"*. In `/var/lib/pgsql/data/pg_hba.conf`, change the `host all all 127.0.0.1/32 ident` line to `scram-sha-256` and run `sudo systemctl reload postgresql`. Ubuntu's default already allows password logins on 127.0.0.1.
+
+> Using a managed or remote database instead? Point `DB_HOST` at it and set `DB_SSL=true` if it requires SSL. To put the tables inside an existing database instead of a new one, set `DB_SCHEMA=community` and give the role ownership of that schema. A separate database is simpler and recommended.
+
+## Step 3: Install the application
+
+```bash
+# A system user that owns and runs the app
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin openrings
+
+# Unpack the zip
+sudo mkdir -p /opt/openrings-community
+sudo unzip openrings-community.zip -d /opt/openrings-community
+cd /opt/openrings-community
+
+# Install the libraries (no build step, no native modules)
+sudo npm ci --omit=dev
+sudo chown -R openrings:openrings /opt/openrings-community
+```
+
+## Step 4: Configure `.env`
+
+```bash
+cd /opt/openrings-community
+sudo cp .env.example .env
+sudo nano .env
+```
+
+Production values:
+
+```ini
+NODE_ENV=production
+PORT=3000
+HOST=127.0.0.1
+SITE_URL=https://openrings.org
+BASE_PATH=/community
+SITE_NAME=OpenRings Community
+SITE_TIMEZONE=Asia/Kolkata        # daily posts are published 09:00–21:00 in this zone
+TRUST_PROXY=loopback              # nginx on the same machine
+
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=openrings_community
+DB_USER=openrings
+DB_PASSWORD="CHANGE-ME-strong-password"   # keep the double quotes if it contains # or spaces
+
+RUN_WORKERS=true
+# AI keys are NOT needed here: choose Claude or OpenAI and paste the key in Admin → AI provider (step 8).
+# Keys are stored encrypted; the encryption key is created in data/secret.key on first save.
+```
+
+Lock it down. It contains the database password:
+
+```bash
+sudo chown openrings:openrings .env
+sudo chmod 600 .env
+```
+
+Notes:
+- `SITE_URL` is the public origin only (no path), and `BASE_PATH` is the folder. Together they build canonical URLs, the sitemap and redirects.
+- `NODE_ENV=production` makes login cookies HTTPS-only. Test through **https://openrings.org/community/**, not `http://server-ip:3000`, or logins won't stick.
+
+## Step 5: Check the setup and create the first accounts
+
+```bash
+cd /opt/openrings-community
+sudo -u openrings node scripts/doctor.js
+```
+
+You should see `[OK]` for Node.js, `.env`, the PostgreSQL connection and **All 11 forum tables exist**. This first run also creates the tables. AI shows as *Off* until you set it up in the admin panel (step 8). After that, doctor also checks the key, the model and the credit or quota with one tiny request (well under $0.01). Add `--skip-test-call` to skip that request. Fix any `[FAIL]` line using the hint printed under it.
+
+Create the admin and the RingQ Support engineers:
+
+```bash
+sudo -u openrings node scripts/init.js --admin  siteadmin   admin@yourdomain.com   'Strong-Admin-Pass'
+sudo -u openrings node scripts/init.js --support ringq_arun  arun@yourdomain.com    'Strong-Support-Pass'
+```
+
+Admins can add more support engineers later in **Admin → Users & staff**. Forgot a password? `sudo -u openrings node scripts/init.js --reset-password <user> '<new password>'`.
+
+## Step 6: Run it as a service
+
+```bash
+which node      # if this is not /usr/bin/node, edit ExecStart in the unit file
+sudo cp deploy/openrings-community.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now openrings-community
+sudo systemctl status openrings-community
+curl -I http://127.0.0.1:3000/community/      # expect HTTP 200
+```
+
+Logs: `sudo journalctl -u openrings-community -f`. On start it prints the URL, the AI mode, and a warning if there is no admin yet.
+
+## Step 7: Publish it at /community on openrings.org
+
+**nginx:** paste the two `location` blocks from [`deploy/nginx-community.conf`](../deploy/nginx-community.conf) into the existing `server { … }` block that serves openrings.org over HTTPS:
+
+```nginx
+location = /community {
+    return 301 /community/;
+}
+location /community/ {
+    proxy_pass         http://127.0.0.1:3000;     # no path after the port: /community/... is passed unchanged
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    client_max_body_size 1m;
+}
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Apache:** use [`deploy/apache-community.conf`](../deploy/apache-community.conf) instead (needs `mod_proxy`, `mod_proxy_http`, `mod_headers`).
+
+If openrings.org is served from a static host or CDN rather than this server's nginx, add an equivalent rule there that forwards `/community/*` to this server.
+
+Then, on the main website:
+1. **Add "Community" to the site menu**, linking to `https://openrings.org/community/`.
+2. **Add the sitemap** to openrings.org's `robots.txt`: `Sitemap: https://openrings.org/community/sitemap.xml`. Submit it in Google Search Console.
+
+Nothing else on the main site changes. The forum sends its own security headers (CSP) for `/community/` pages only.
+
+## Step 8: Go-live checklist (in the browser, as admin)
+
+1. Open **https://openrings.org/community/** and log in as the admin.
+2. **Admin → AI provider**: choose **Claude** or **OpenAI** and paste a separate production API key, or set up **Open Rings AI** with `sudo node scripts/setup-openrings-ai.js` (see "Open Rings AI engine" below). Click **Save and test connection**. All lines should say *OK*.
+3. **Admin → Users & staff**: tick **On duty** for the engineers who should receive draft replies.
+4. **Admin → Knowledge base**: review and complete the product facts. Drafts state OpenRings facts only from this text. It is stored in the database; editing the file on disk later has no effect.
+5. **Admin → Answer settings**: choose how answers are published: **Support review** (engineers post drafts), **Support review, with automatic answer if nobody reviews in time**, or **Automatic, in real time** (every question answered within seconds, labelled *Automated*; set the wait to 0–5 seconds). Check questions per day, the posting window and **Hold generated questions for admin approval** (off by default; when on, release waiting questions in **Admin → Daily posts → Approve all**). Untick *Create new discussions every day* to start without daily posts.
+6. Register a test member in a private window and ask a question. (Questions from admin or support accounts never get drafts automatically.) In a review mode, the on-duty engineer sees a draft under **Support inbox** (the inbox icon in the header) within about a minute; post it and check the thread. In **Automatic, in real time**, stay on the thread page: *A reply is being prepared…* shows, and the answer appears within seconds without reloading. The page polls `/community/threads/<id>/live`, a normal HTTP request, so no WebSocket or extra proxy settings are needed.
+7. Set a monthly **spend limit** for the production key: Claude Console, or your OpenAI account's limits/billing settings.
+
+---
+
+## Open Rings AI engine (optional, no API key)
+
+To answer with Open Rings AI instead of Claude or OpenAI, run this once on the server, in the app folder:
+
+```bash
+cd /opt/openrings-community
+sudo node scripts/setup-openrings-ai.js
+```
+
+It installs the Open Rings AI engine as its own systemd service, downloads the language model (about 5 GB), creates the `openrings-ai` model, tests it and selects **Open Rings AI** in Admin → AI provider. Then click **Save and test connection** there. To run the engine on a separate, bigger machine instead, run the same script there (copy the app folder or just the `scripts` and `src` folders) and enter `http://<that machine>:11434/v1` as *Engine address* in Admin → AI provider.
+
+For the server administrator: the engine is the open-source Ollama runtime (MIT licence); the default language model is Qwen 2.5 7B (Apache 2.0). These names appear only on the server, not in the forum.
+
+| Task | Command |
+|---|---|
+| Status / restart | `sudo systemctl status ollama` · `sudo systemctl restart ollama` |
+| Logs | `sudo journalctl -u ollama -f` |
+| Models on the engine | `curl -s http://127.0.0.1:11434/api/tags` |
+| Update the engine | `curl -fsSL https://ollama.com/install.sh \| sudo sh` (keeps the downloaded models) |
+
+- It listens on `127.0.0.1:11434` only, with no login. Never open port 11434 in the firewall. If the engine runs on another machine, allow that port only from the forum server's IP.
+- Models are stored under `/usr/share/ollama/.ollama/models` (about 5 GB).
+- A machine without a graphics card answers in roughly one to several minutes. Answers wait in the queue meanwhile; nothing is lost.
+
+## Moving data from the Windows test PC (optional)
+
+**Recommended: start with the empty production database**, so test posts don't go live. Copy the knowledge base text by hand: open Admin → Knowledge base on the PC, copy everything, paste it into the production admin page and click Save.
+
+To copy everything instead (accounts, forums, posts, settings), do this **before the first start** on the server:
+
+```bash
+# On the Windows PC (Command Prompt, in a folder you can write to)
+pg_dump -U openrings -h localhost -Fc openrings_community -f community.dump
+
+# On the server, into the new empty database
+pg_restore --no-owner --role=openrings -U openrings -h 127.0.0.1 -d openrings_community community.dump
+```
+
+## Updating to a new version
+
+```bash
+sudo -u postgres pg_dump -Fc openrings_community -f /tmp/before-update.dump   # quick backup
+sudo unzip -o openrings-community.zip -d /opt/openrings-community             # .env and data/ are not in the zip, so they are kept
+cd /opt/openrings-community && sudo npm ci --omit=dev && sudo chown -R openrings:openrings .
+sudo systemctl restart openrings-community
+sudo -u openrings node scripts/doctor.js --skip-test-call
+```
+
+Database changes for new versions are applied automatically on restart.
+
+## Backups
+
+Daily database backup, keeping 14 days:
+
+```bash
+sudo mkdir -p /var/backups/openrings-community && sudo chown postgres: /var/backups/openrings-community
+echo "15 2 * * * postgres pg_dump -Fc openrings_community -f /var/backups/openrings-community/community-\$(date +\%F).dump && find /var/backups/openrings-community -name '*.dump' -mtime +14 -delete" | sudo tee /etc/cron.d/openrings-community-backup
+```
+
+Restore: `sudo -u postgres pg_restore --clean --no-owner --role=openrings -d openrings_community /var/backups/openrings-community/community-YYYY-MM-DD.dump`
+
+Back up the database **and** `/opt/openrings-community/data/secret.key`, which encrypts the API keys saved in the admin panel. Without that file, a restored database still works, but you re-enter the API keys in Admin → AI provider. The rest of the application folder can always be recreated from the zip plus `.env`.
+
+## Operations
+
+| Task | Command |
+|---|---|
+| Status / restart | `sudo systemctl status openrings-community` · `sudo systemctl restart openrings-community` |
+| Live logs | `sudo journalctl -u openrings-community -f` |
+| Health check | `sudo -u openrings node scripts/doctor.js --skip-test-call` |
+| Reset a password | `sudo -u openrings node scripts/init.js --reset-password <user> '<new password>'` |
+| Add a support engineer | Admin → Users & staff, or `node scripts/init.js --support <user> <email> '<password>'` |
+| Usage and errors of draft jobs | Admin → Activity (token usage per job, retry button) |
+
+- Run **one** instance. Background jobs are safe across processes, but the login rate limiter is in memory.
+- Port 3000 must not be opened in the firewall; nginx reaches it locally.
+- Email (password reset, notifications) is not built in yet. Use `init.js --reset-password`.
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `502 Bad Gateway` on /community | The service isn't running or not on port 3000: `systemctl status openrings-community`, `journalctl -u openrings-community -n 50`. |
+| 404 page from nginx, or pages without styles | `BASE_PATH=/community` missing in `.env`, or `proxy_pass` has a path after the port (it must be exactly `http://127.0.0.1:3000;`). |
+| Login seems to work but you stay logged out | You opened it over plain http or directly on port 3000. Use https://openrings.org/community/. Check that nginx sends `X-Forwarded-Proto`. |
+| `password authentication failed for user "openrings"` | Wrong `DB_PASSWORD`. Quote it in `.env` if it contains `#`. |
+| `Ident authentication failed` | RHEL `pg_hba.conf`: change `ident` to `scram-sha-256` for 127.0.0.1 (step 2). |
+| `permission denied for schema public` | The database isn't owned by `openrings`: `ALTER DATABASE openrings_community OWNER TO openrings;` then, connected to that database, `ALTER SCHEMA public OWNER TO openrings;` |
+| `connect ECONNREFUSED 127.0.0.1:5432` | PostgreSQL isn't running (`systemctl status postgresql`), or `DB_PORT` is wrong. |
+| AI provider says "The saved key cannot be read" | `data/secret.key` was lost or replaced (e.g. new server). Paste the API key again and Save. |
+| `status=203/EXEC` in systemd | Node isn't at `/usr/bin/node`. Set `ExecStart` to the output of `which node`. |
+| `EADDRINUSE :3000` | Port taken. Set another `PORT` and use the same port in `proxy_pass`. |
+| "The Open Rings AI engine is not running" | Start it: `sudo systemctl start ollama`. Not installed yet: `sudo node scripts/setup-openrings-ai.js`. Queued answers are written once it runs. |
+| No drafts appear | Questions posted by admin or support accounts never get drafts; test with a member account. Admin → AI provider → **Save and test connection** checks the key, the model and the credit. Admin → Activity shows the error. `credit balance is too low` (Claude) or `exceeded your current quota` (OpenAI): add credits or a payment method (jobs retry hourly for a day). Questions posted by staff accounts never get drafts. |
+
+## Docker alternative
+
+A `Dockerfile` and `docker-compose.yml` are included. The container listens on 3000, and you publish it on `127.0.0.1:3000` only. Set `SECRET_KEY` in `.env` (any long random string), because the container's own files are lost when it is rebuilt. Set `DB_HOST=host.docker.internal` to use PostgreSQL on the host. Steps 2, 4, 5 (run inside the container), 7 and 8 stay the same.
