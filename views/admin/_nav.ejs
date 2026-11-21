@@ -1,0 +1,17 @@
+<nav class="admin-nav" aria-label="Admin">
+  <a href="<%= url('/support/inbox') %>">Support inbox<% if (inboxCount) { %> (<%= inboxCount %>)<% } %></a>
+  <% [['', 'dashboard', 'Dashboard'], ['/queue', 'queue', 'Daily posts'], ['/settings', 'settings', 'Answer settings'], ['/ai', 'ai', 'AI provider'], ['/knowledge', 'knowledge', 'Knowledge base'], ['/topics', 'topics', 'Topic ideas'], ['/personas', 'personas', 'Personas'], ['/forums', 'forums', 'Forums'], ['/users', 'users', 'Users & staff'], ['/jobs', 'jobs', 'Activity']].forEach(([p, key, label]) => { %>
+    <a href="<%= url('/admin' + p) %>" class="<%= adminSection === key ? 'is-active' : '' %>"><%= label %></a>
+  <% }) %>
+</nav>
+<% if (typeof engineOutage !== 'undefined' && engineOutage) { %>
+<div class="alert alert--error engine-alert">
+  <strong>The Open Rings AI engine is not answering</strong> at <%= engineOutage.baseUrl %>. <%= engineOutage.waiting %> answer<%= engineOutage.waiting === 1 ? '' : 's' %> and follow-up<%= engineOutage.waiting === 1 ? '' : 's' %> are waiting; they are tried again every 2 minutes and posted as soon as the engine runs.
+  On the forum PC, the engine starts with Windows; if it was closed, click the button (it starts it again) or run <code>npm run ai:setup</code>.
+  <form method="post" action="<%= url('/admin/ai/engine-check') %>" class="inline-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="from" value="<%= adminSection === 'jobs' ? 'jobs' : 'ai' %>">
+    <button class="btn btn--sm btn--ghost" type="submit">Check engine now</button>
+  </form>
+</div>
+<% } %>

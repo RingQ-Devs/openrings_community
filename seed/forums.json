@@ -1,0 +1,40 @@
+[
+  {
+    "title": "OpenRings Community",
+    "description": "News, introductions and general PBX talk",
+    "forums": [
+      { "slug": "announcements", "title": "Announcements & Releases", "description": "Official news, new versions and release notes for OpenRings.", "icon": "megaphone", "staff_only": true, "seed_weight": 0, "ai_enabled": false },
+      { "slug": "general-discussion", "title": "General Discussion", "description": "Anything about OpenRings, business telephony and VoIP.", "icon": "chat", "seed_weight": 2 },
+      { "slug": "getting-started", "title": "Getting Started", "description": "New to OpenRings? Ask beginner questions about planning, installing and your first call.", "icon": "bulb", "seed_weight": 3 }
+    ]
+  },
+  {
+    "title": "Installation & Connectivity",
+    "description": "Deploying OpenRings and connecting it to the world",
+    "forums": [
+      { "slug": "installation-upgrades", "title": "Installation & Upgrades", "description": "Installing the binary, container or source build; servers, VMs and cloud; upgrades and backups.", "icon": "server", "seed_weight": 3 },
+      { "slug": "sip-trunks-providers", "title": "SIP Trunks & VoIP Providers", "description": "Connecting SIP trunks, DIDs, registrations and provider settings.", "icon": "globe", "seed_weight": 3 },
+      { "slug": "ip-phones-provisioning", "title": "IP Phones & Provisioning", "description": "Desk phones, auto-provisioning, BLF keys and phone firmware.", "icon": "phone", "seed_weight": 2 },
+      { "slug": "network-nat-security", "title": "Network, NAT & Security", "description": "Firewalls, port forwarding, one-way audio, TLS/SRTP and keeping your PBX safe.", "icon": "shield", "seed_weight": 3 }
+    ]
+  },
+  {
+    "title": "Features & Configuration",
+    "description": "Get the most out of your phone system",
+    "forums": [
+      { "slug": "call-routing-ivr", "title": "Dialplan, Routing & IVR", "description": "XML dialplan, inbound and outbound routing, IVR menus, office hours and holidays.", "icon": "route", "seed_weight": 3 },
+      { "slug": "queues-call-center", "title": "Queues, Ring Groups & Call Center", "description": "Queues, ring strategies, tiers, AUX codes, wallboards and reports.", "icon": "users", "seed_weight": 2 },
+      { "slug": "voicemail-recording", "title": "Voicemail, Recording, Fax & Reports", "description": "Voicemail, call recording, fax, transcription and CDRs.", "icon": "mic", "seed_weight": 2 },
+      { "slug": "softphones-webrtc", "title": "Mobile, Softphones & WebRTC", "description": "Browser dialer, WebRTC, video meetings and softphones.", "icon": "mobile", "seed_weight": 2 },
+      { "slug": "integrations-api", "title": "Integrations & API", "description": "Event socket, JSON API, live events, CRM integrations and custom development.", "icon": "plug", "seed_weight": 2 }
+    ]
+  },
+  {
+    "title": "Help & Feedback",
+    "description": "Troubleshooting and ideas",
+    "forums": [
+      { "slug": "troubleshooting", "title": "Troubleshooting", "description": "Something not working? Call quality, registration failures, errors and logs.", "icon": "tool", "seed_weight": 3 },
+      { "slug": "feature-requests", "title": "Feature Requests", "description": "Suggest features for future OpenRings releases.", "icon": "sparkle", "seed_weight": 1 }
+    ]
+  }
+]

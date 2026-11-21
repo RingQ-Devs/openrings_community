@@ -1,0 +1,57 @@
+<%- include('../partials/header') %>
+<div class="page-head"><h1>Answer settings</h1></div>
+<%- include('_nav') %>
+<% const on = (k) => settings[k] === '1' ? 'checked' : ''; %>
+<form class="card form" method="post" action="<%= url('/admin/settings') %>">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <p class="muted small">Answer writer: <strong><%= aiModel %></strong>. Change it in <a href="<%= url('/admin/ai') %>">AI provider</a>.</p>
+
+  <h2>How answers are published</h2>
+  <label class="check"><input type="radio" name="reply_mode" value="review" <%= !['review_fallback', 'auto'].includes(settings.reply_mode) ? 'checked' : '' %>>
+    <span><strong>Support review.</strong> Every new question gets a draft reply in the <a href="<%= url('/support/inbox') %>">Support inbox</a>, assigned at random to an on-duty engineer. The engineer checks it, edits if needed and posts it under their own name with the <em><%= settings.support_team_name %></em> badge. Nothing is posted until a person approves it.</span></label>
+  <label class="check"><input type="radio" name="reply_mode" value="review_fallback" <%= settings.reply_mode === 'review_fallback' ? 'checked' : '' %>>
+    <span><strong>Support review, with automatic answer if nobody reviews in time (recommended for 24/7).</strong> Same as above. If no engineer posts the draft within the time below, it is posted from the automated account, labelled <em>Automated</em>. Every question gets an answer, and engineers can still reply later.</span></label>
+  <label class="field" style="max-width:320px"><span>Wait for a review before posting automatically (minutes)</span><input type="number" name="review_fallback_minutes" value="<%= settings.review_fallback_minutes %>" min="1" max="1440"></label>
+  <label class="check"><input type="radio" name="reply_mode" value="auto" <%= settings.reply_mode === 'auto' ? 'checked' : '' %>>
+    <span><strong>Automatic, in real time.</strong> Every question gets an answer within seconds, posted from the automated account labelled <em>Automated</em>. It appears on the page without reloading. Support engineers can add to any thread. Drafts already waiting in the inbox are posted when you save. Tip: set the wait below to 0–5 seconds.</span></label>
+  <label class="field"><span>Support team name (shown on staff badges and in public texts)</span><input type="text" name="support_team_name" value="<%= settings.support_team_name %>" maxlength="40"></label>
+
+  <h2>Answers</h2>
+  <label class="check"><input type="checkbox" name="ai_autoreply_enabled" value="1" <%= on('ai_autoreply_enabled') %>> Write an answer for every new thread</label>
+  <label class="check"><input type="checkbox" name="ai_followups_enabled" value="1" <%= on('ai_followups_enabled') %>> Also answer follow-up replies (it skips "thanks" and member-to-member chat)</label>
+  <label class="check"><input type="checkbox" name="ai_stop_when_staff_replies" value="1" <%= on('ai_stop_when_staff_replies') %>> Automatic mode: stop once a support engineer posts in the thread</label>
+  <div class="field-row">
+    <label class="field"><span>Wait before writing a reply, min (seconds)</span><input type="number" name="ai_reply_delay_seconds" value="<%= settings.ai_reply_delay_seconds %>" min="0" max="86400"></label>
+    <label class="field"><span>… max (seconds, optional; a random wait in between)</span><input type="number" name="ai_reply_delay_max_seconds" value="<%= settings.ai_reply_delay_max_seconds %>" min="0" max="86400" placeholder="same as min"></label>
+    <label class="field"><span>Max support answers per thread</span><input type="number" name="ai_max_replies_per_thread" value="<%= settings.ai_max_replies_per_thread %>" min="1" max="50"></label>
+  </div>
+
+  <h2>Daily discussions</h2>
+  <p class="muted small">Each day the scheduler writes new questions from the sample member accounts and publishes them at random times in the posting window. Each question is answered after the answer delay. Then the sample member asks a few follow-up questions (a random number between the min and max below), each one after the follow-up delay, and each follow-up is answered too, up to <em>Max support answers per thread</em>. Example: follow-ups 3 and 3 with max answers 4 gives every daily discussion 4 answers.</p>
+  <label class="check"><input type="checkbox" name="seed_enabled" value="1" <%= on('seed_enabled') %>> Create new discussions every day</label>
+  <label class="check"><input type="checkbox" name="seed_require_approval" value="1" <%= on('seed_require_approval') %>> Hold generated questions for admin approval before publishing</label>
+  <label class="check"><input type="checkbox" name="disclose_personas" value="1" <%= on('disclose_personas') %>> Label sample member accounts and their questions as “Sample question”</label>
+  <div class="field-row">
+    <label class="field"><span>Questions per day</span><input type="number" name="seed_posts_per_day" value="<%= settings.seed_posts_per_day %>" min="0" max="20"></label>
+    <label class="field"><span>Posting window start (hour, <%= config.timezone %>)</span><input type="number" name="seed_window_start_hour" value="<%= settings.seed_window_start_hour %>" min="0" max="23"></label>
+    <label class="field"><span>Posting window end (hour)</span><input type="number" name="seed_window_end_hour" value="<%= settings.seed_window_end_hour %>" min="1" max="24"></label>
+  </div>
+  <div class="field-row">
+    <label class="field"><span>Answer delay, min (minutes)</span><input type="number" name="seed_answer_delay_min_minutes" value="<%= settings.seed_answer_delay_min_minutes %>" min="0" max="1440"></label>
+    <label class="field"><span>Answer delay, max (minutes)</span><input type="number" name="seed_answer_delay_max_minutes" value="<%= settings.seed_answer_delay_max_minutes %>" min="0" max="1440"></label>
+  </div>
+  <div class="field-row">
+    <label class="field"><span>Follow-up questions per discussion, min</span><input type="number" name="seed_followups_min" value="<%= settings.seed_followups_min %>" min="0" max="10"></label>
+    <label class="field"><span>Follow-up questions per discussion, max</span><input type="number" name="seed_followups_max" value="<%= settings.seed_followups_max %>" min="0" max="10"></label>
+  </div>
+  <div class="field-row">
+    <label class="field"><span>Follow-up delay, min (minutes after an answer)</span><input type="number" name="seed_followup_delay_min_minutes" value="<%= settings.seed_followup_delay_min_minutes %>" min="0" max="1440"></label>
+    <label class="field"><span>Follow-up delay, max (minutes)</span><input type="number" name="seed_followup_delay_max_minutes" value="<%= settings.seed_followup_delay_max_minutes %>" min="0" max="1440"></label>
+  </div>
+
+  <h2>Site</h2>
+  <label class="field"><span>Announcement banner (optional)</span><input type="text" name="announcement" value="<%= settings.announcement %>" maxlength="500" placeholder="e.g. OpenRings 0.11 is out, see the release notes"></label>
+
+  <div class="form-actions"><button class="btn btn--primary" type="submit">Save settings</button></div>
+</form>
+<%- include('../partials/footer') %>

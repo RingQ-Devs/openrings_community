@@ -1,0 +1,59 @@
+<%
+  // One post in a thread. Needs: p (post row), number (position in thread), thread, plus the page locals.
+  const author = { username: p.username, role: p.role };
+  const isSolution = thread.solution_post_id === p.id;
+%>
+<article class="post<%= p.role === 'ai' ? ' post--bot' : '' %><%= (p.role === 'support' || p.role === 'admin') ? ' post--staff' : '' %><%= isSolution ? ' post--solution' : '' %>" id="post-<%= p.id %>">
+        <aside class="post-author">
+          <%- h.avatar(author, 56) %>
+          <div class="post-author-info">
+            <%- h.userLink(url(''), author, 'username post-username') %>
+            <div class="post-badges"><%- badges(author) %></div>
+            <% if (p.user_title && p.role !== 'ai') { %><div class="user-title"><%= p.user_title %></div><% } %>
+            <dl class="post-author-stats">
+              <% if (p.role !== 'ai') { %><div><dt>Joined</dt><dd><%= fmt.formatDate(p.user_joined) %></dd></div><% } %>
+              <div><dt>Messages</dt><dd><%= fmt.compactNumber(p.user_post_count) %></dd></div>
+              <% if (p.user_location) { %><div class="hide-sm"><dt>Location</dt><dd><%= p.user_location %></dd></div><% } %>
+            </dl>
+          </div>
+        </aside>
+        <div class="post-main">
+          <header class="post-header">
+            <a class="muted small" href="<%= url('/posts/' + p.id) %>"><time datetime="<%= p.created_at %>" title="<%= fmt.formatDateTime(p.created_at) %>"><%= fmt.formatDateTime(p.created_at) %></time></a>
+            <span class="post-header-right">
+              <% if (isSolution) { %><span class="label label--solved"><%- icon('check', 12) %> Solution</span><% } %>
+              <a class="muted small" href="<%= url('/posts/' + p.id) %>" aria-label="Link to post <%= number %>">#<%= number %></a>
+            </span>
+          </header>
+          <div class="post-body"><%- p.body_html %></div>
+          <% if (p.updated_at) { %><p class="muted small edited">Last edited <%= fmt.timeAgo(p.updated_at) %></p><% } %>
+          <% if (p.role === 'ai') { %>
+          <p class="bot-note"><%- icon('help', 14) %> Automated answer. Check it before you change a production system. The <%= supportTeamName %> team follows up when needed.</p>
+          <% } %>
+          <footer class="post-actions">
+            <% if (user && user.id !== p.user_id) { %>
+            <form method="post" action="<%= url('/posts/' + p.id + '/like') %>" data-like>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="action<%= p.liked ? ' is-liked' : '' %>" aria-pressed="<%= p.liked ? 'true' : 'false' %>"><%- icon('heart', 15) %> <span data-like-label><%= p.liked ? 'Liked' : 'Like' %></span></button>
+            </form>
+            <% } %>
+            <span class="like-count small muted" data-like-count="<%= p.id %>"><%= p.like_count ? p.like_count + (p.like_count === 1 ? ' like' : ' likes') : '' %></span>
+            <span class="spacer"></span>
+            <% if (canReply) { %><button type="button" class="action" data-quote="<%= p.username %>" data-quote-src="post-src-<%= p.id %>"><%- icon('quote', 15) %> Quote</button><% } %>
+            <% if (user && number > 1 && (user.id === thread.user_id || isStaff)) { %>
+            <form method="post" action="<%= url('/posts/' + p.id + '/solution') %>">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="action"><%- icon('check', 15) %> <%= isSolution ? 'Unmark solution' : 'Mark as solution' %></button>
+            </form>
+            <% } %>
+            <% if (user && (user.id === p.user_id || isStaff)) { %><a class="action" href="<%= url('/posts/' + p.id + '/edit') %>"><%- icon('edit', 15) %> Edit</a><% } %>
+            <% if (isStaff) { %>
+            <form method="post" action="<%= url('/posts/' + p.id + '/delete') %>" data-confirm="Delete this post?">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="action action--danger"><%- icon('trash', 15) %> Delete</button>
+            </form>
+            <% } %>
+          </footer>
+          <% if (canReply) { %><template id="post-src-<%= p.id %>"><%= p.body %></template><% } %>
+        </div>
+      </article>

@@ -1,0 +1,70 @@
+<%- include('../partials/header') %>
+<div class="page-head"><h1>Forums</h1></div>
+<%- include('_nav') %>
+<% categories.forEach(cat => { %>
+<section class="card admin-cat">
+  <form class="inline-form" method="post" action="<%= url('/admin/categories/' + cat.id) %>">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="text" name="title" value="<%= cat.title %>" aria-label="Category title" required>
+    <input type="text" name="description" value="<%= cat.description %>" aria-label="Category description" placeholder="Description">
+    <input type="number" name="sort_order" value="<%= cat.sort_order %>" aria-label="Order" class="input-xs">
+    <button class="btn btn--sm" type="submit">Save category</button>
+    <button class="btn btn--sm btn--danger" type="submit" name="action" value="delete">Delete</button>
+  </form>
+  <table class="table">
+    <thead><tr><th>Forum</th><th>AI answers</th><th>Daily posts weight</th><th>Staff-only</th><th></th></tr></thead>
+    <tbody>
+    <% cat.forums.forEach(f => { %>
+    <tr><td colspan="5">
+      <form class="forum-edit" method="post" action="<%= url('/admin/forums/' + f.id) %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="category_id" value="<%= cat.id %>">
+        <div class="forum-edit-main">
+          <span class="node-icon"><%- icon(f.icon, 18) %></span>
+          <input type="text" name="title" value="<%= f.title %>" required aria-label="Title">
+          <input type="text" name="slug" value="<%= f.slug %>" aria-label="Slug" class="input-sm">
+          <select name="icon" aria-label="Icon"><% icons.forEach(i => { %><option <%= f.icon === i ? 'selected' : '' %>><%= i %></option><% }) %></select>
+          <input type="number" name="sort_order" value="<%= f.sort_order %>" class="input-xs" aria-label="Order">
+        </div>
+        <input type="text" name="description" value="<%= f.description %>" aria-label="Description" class="input-full">
+        <div class="forum-edit-flags">
+          <label class="check"><input type="checkbox" name="ai_enabled" value="1" <%= f.ai_enabled ? 'checked' : '' %>> AI answers</label>
+          <label>Daily posts weight <input type="number" name="seed_weight" value="<%= f.seed_weight %>" min="0" max="10" class="input-xs"></label>
+          <label class="check"><input type="checkbox" name="staff_only" value="1" <%= f.staff_only ? 'checked' : '' %>> Only staff can start threads</label>
+          <span class="muted small"><%= f.thread_count %> threads</span>
+          <button class="btn btn--sm btn--primary" type="submit">Save</button>
+        </div>
+      </form>
+    </td></tr>
+    <% }) %>
+    </tbody>
+  </table>
+</section>
+<% }) %>
+<div class="admin-grid admin-grid--wide">
+  <section class="card">
+    <h2 class="card-title">New forum</h2>
+    <form class="form" method="post" action="<%= url('/admin/forums') %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field-row">
+        <label class="field"><span>Category</span><select name="category_id"><% categories.forEach(c => { %><option value="<%= c.id %>"><%= c.title %></option><% }) %></select></label>
+        <label class="field"><span>Icon</span><select name="icon"><% icons.forEach(i => { %><option><%= i %></option><% }) %></select></label>
+      </div>
+      <label class="field"><span>Title</span><input type="text" name="title" required></label>
+      <label class="field"><span>Description</span><input type="text" name="description"></label>
+      <input type="hidden" name="ai_enabled" value="1"><input type="hidden" name="seed_weight" value="1">
+      <button class="btn btn--primary btn--sm" type="submit">Create forum</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2 class="card-title">New category</h2>
+    <form class="form" method="post" action="<%= url('/admin/categories') %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label class="field"><span>Title</span><input type="text" name="title" required></label>
+      <label class="field"><span>Description</span><input type="text" name="description"></label>
+      <label class="field"><span>Order</span><input type="number" name="sort_order" value="<%= categories.length %>"></label>
+      <button class="btn btn--primary btn--sm" type="submit">Create category</button>
+    </form>
+  </section>
+</div>
+<%- include('../partials/footer') %>

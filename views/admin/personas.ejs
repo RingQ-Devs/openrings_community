@@ -1,0 +1,72 @@
+<%- include('../partials/header') %>
+<div class="page-head"><h1>Personas</h1></div>
+<%- include('_nav') %>
+<p class="muted">Persona accounts post the daily starter questions. They cannot log in. Their profile says their questions are AI-generated while the disclosure setting is on.</p>
+<div class="admin-grid admin-grid--wide">
+  <section class="card">
+    <h2 class="card-title">Generate with AI</h2>
+    <form class="inline-form" method="post" action="<%= url('/admin/personas/generate') %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>How many <input type="number" name="count" value="5" min="1" max="10"></label>
+      <button class="btn btn--primary btn--sm" type="submit">Generate</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2 class="card-title">Add manually</h2>
+    <details><summary class="small">New persona</summary>
+    <form class="form" method="post" action="<%= url('/admin/personas') %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field-row">
+        <label class="field"><span>Username</span><input type="text" name="username" required pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{2,23}"></label>
+        <label class="field"><span>Location</span><input type="text" name="location"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Job</span><input type="text" name="job" placeholder="IT manager"></label>
+        <label class="field"><span>Organization</span><input type="text" name="organization" placeholder="a 50-room hotel"></label>
+        <label class="field"><span>Experience</span><select name="experience"><option>beginner</option><option selected>intermediate</option><option>advanced</option><option>expert</option></select></label>
+      </div>
+      <label class="field"><span>Writing style</span><input type="text" name="writing_style" placeholder="short and direct, pastes logs"></label>
+      <label class="field"><span>Bio</span><input type="text" name="bio"></label>
+      <button class="btn btn--primary btn--sm" type="submit">Create persona</button>
+    </form></details>
+  </section>
+</div>
+<div class="table-wrap card">
+<table class="table">
+  <thead><tr><th>Persona</th><th>Profile</th><th>Posts</th><th></th></tr></thead>
+  <tbody>
+  <% personas.forEach(p => { %>
+    <tr class="<%= p.is_active ? '' : 'is-muted' %>">
+      <td class="nowrap"><%- h.avatar(p, 28) %> <%- h.userLink(url(''), p) %><br><span class="muted small"><%= p.location %></span></td>
+      <td>
+        <details><summary class="small"><%= p.persona.job || '—' %> · <%= p.persona.organization || '—' %> · <%= p.persona.experience || '' %></summary>
+          <form class="form" method="post" action="<%= url('/admin/personas/' + p.id) %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="field-row">
+              <label class="field"><span>Username</span><input type="text" name="username" value="<%= p.username %>"></label>
+              <label class="field"><span>Location</span><input type="text" name="location" value="<%= p.location %>"></label>
+            </div>
+            <div class="field-row">
+              <label class="field"><span>Job</span><input type="text" name="job" value="<%= p.persona.job || '' %>"></label>
+              <label class="field"><span>Organization</span><input type="text" name="organization" value="<%= p.persona.organization || '' %>"></label>
+              <label class="field"><span>Experience</span><select name="experience"><% ['beginner','intermediate','advanced','expert'].forEach(x => { %><option <%= p.persona.experience === x ? 'selected' : '' %>><%= x %></option><% }) %></select></label>
+            </div>
+            <label class="field"><span>Writing style</span><input type="text" name="writing_style" value="<%= p.persona.writing_style || '' %>"></label>
+            <label class="field"><span>Bio</span><input type="text" name="bio" value="<%= p.bio %>"></label>
+            <button class="btn btn--sm btn--primary" type="submit">Save</button>
+          </form>
+        </details>
+      </td>
+      <td><%= p.post_count %></td>
+      <td>
+        <form method="post" action="<%= url('/admin/personas/' + p.id) %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="action" value="toggle">
+          <button class="btn btn--sm" type="submit"><%= p.is_active ? 'Pause' : 'Activate' %></button>
+        </form>
+      </td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>
+</div>
+<%- include('../partials/footer') %>
