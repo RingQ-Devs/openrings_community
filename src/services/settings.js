@@ -46,7 +46,7 @@ export const SETTING_DEFAULTS = {
   seed_followup_delay_min_minutes: '30',
   seed_followup_delay_max_minutes: '240',
   seed_last_plan_date: '',
-  disclose_personas: '0',
+  disclose_personas: '1',
   // Content
   announcement: '',
   // Starting text only: copied into the database the first time; after that the database copy is used.
