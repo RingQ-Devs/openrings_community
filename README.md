@@ -985,3 +985,29 @@ npm test
 (PowerShell: `$env:TEST_DATABASE_URL = "postgres://..."`; Linux: `TEST_DATABASE_URL=... npm test`.)
 
 Expected result: `# pass 40` and `# fail 0`.
+
+---
+
+## Appendix: running on Vercel
+
+The forum can also run on Vercel, with no server of its own.
+
+- `api/index.js` serves every page (Express app). `vercel.json` sends all paths to it.
+- `api/cron.js` runs every minute (Vercel Cron) and does the background work: today's daily posts and every due job. New questions also start their answer right after the post (`waitUntil`). The always-on worker loop is off on Vercel.
+- The openrings.org project rewrites `/community/:path*` to this project, so the forum still shows at `https://openrings.org/community/`.
+
+Environment variables on the Vercel project:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Postgres connection string (Neon from the Vercel Marketplace; use the pooled URL) |
+| `DB_POOL_SIZE` | `3` |
+| `SITE_URL` | `https://openrings.org` |
+| `BASE_PATH` | `/community` |
+| `SITE_TIMEZONE` | `Asia/Kolkata` |
+| `NODE_ENV` | `production` |
+| `SECRET_KEY` | A long random string (encrypts the AI keys saved in the admin panel) |
+| `CRON_SECRET` | A long random string (Vercel sends it to `/api/cron`) |
+| `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | First admin account, created on first start |
+
+Open Rings AI (self-hosted) cannot run inside Vercel; use Claude or OpenAI, or point the engine address at a server that runs it.

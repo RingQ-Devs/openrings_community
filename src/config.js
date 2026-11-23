@@ -14,11 +14,14 @@ function normalizeBase(base) {
 }
 
 const isProduction = process.env.NODE_ENV === 'production';
+// Running as Vercel functions: no long-lived process, so background work runs from a cron call instead.
+const onVercel = Boolean(process.env.VERCEL);
 
 export const config = {
   version: JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version,
   root,
   isProduction,
+  onVercel,
   port: Number(process.env.PORT || 3000),
   // 127.0.0.1 = only this computer can open the site (use 0.0.0.0 inside Docker or to test from other devices)
   host: process.env.HOST || '127.0.0.1',
@@ -47,9 +50,9 @@ export const config = {
   },
   cookieSecure: bool(process.env.COOKIE_SECURE, isProduction),
   // "loopback", a hop count like "1", or a comma-separated list of proxy IPs
-  trustProxy: /^\d+$/.test(process.env.TRUST_PROXY || '') ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY || 'loopback',
+  trustProxy: /^\d+$/.test(process.env.TRUST_PROXY || '') ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY || (onVercel ? true : 'loopback'),
   timezone: process.env.SITE_TIMEZONE || 'UTC',
-  runWorkers: bool(process.env.RUN_WORKERS, true),
+  runWorkers: bool(process.env.RUN_WORKERS, !onVercel),
   workerIntervalMs: Number(process.env.WORKER_INTERVAL_MS || 5000),
   // Defaults for the AI provider. Admin → AI provider overrides these; keys can live there instead of .env.
   ai: {
