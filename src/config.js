@@ -36,7 +36,8 @@ export const config = {
   docsUrl: process.env.DOCS_URL || 'https://openrings.org/docs/',
   db: {
     // Either one connection string ...
-    url: process.env.DATABASE_URL || '',
+    // Neon (Vercel) also sets DATABASE_URL_UNPOOLED: its pooler refuses the startup options used below.
+    url: process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || '',
     // ... or separate settings (easier when the password has special characters)
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT || 5432),
