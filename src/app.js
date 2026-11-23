@@ -137,6 +137,12 @@ export async function createApp() {
     res.status(500).render('error', { status: 500, message: 'Something went wrong on our side. Please try again.' });
   });
 
+  // openrings.org serves the forum through a Vercel rewrite. Its clean-URL handling turns
+  // /community/members/ into /community/members/index before proxying, so drop that suffix.
+  app.use((req, res, next) => {
+    req.url = req.url.replace(/\/index(?:\.html)?(?=$|\?)/, '/');
+    next();
+  });
   app.use(config.basePath || '/', router);
   if (config.basePath) app.get('/', (req, res) => res.redirect(config.basePath + '/'));
   return app;
